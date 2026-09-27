@@ -23,4 +23,4 @@ Make the PAS exporter work with modern versions of 3DS Max.
 
 # How to use it
 
-Just grab the latest release, extract the zip, and launch RE2003.html with a browser, like google chrome, fiirefox or microsoft edge.
+Just grab the latest release, extract the zip, and launch RE2003.html with a browser, like google chrome, firefox or microsoft edge.
