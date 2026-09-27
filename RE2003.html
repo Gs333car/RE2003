@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RE2003</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header id="topbar">
+  <div class="hdr-group">
+    <label class="file-btn" title="Point to your NR2003 game folder (the one containing series/ and tracks/)">Open Game Folder<input id="game-folder" type="file" webkitdirectory></label>
+    <select id="lib-car" title="Series (from the game's series/ folder)">
+      <option value="" disabled selected hidden>Series…</option>
+    </select>
+    <select id="lib-track" title="Track (from the game's tracks/ folder)">
+      <option value="" disabled selected hidden>Track…</option>
+    </select>
+    <button id="lib-load" type="button" class="primary" title="Load the selected car and track">Load</button>
+  </div>
+
+  <div class="hdr-spacer"></div>
+
+  <select id="vp-camera" title="Camera view — press C to cycle, Shift+C to go back">
+    <option value="camera1" selected>Camera 1</option>
+    <option value="chase">Chase</option>
+    <option value="farChase">Far Chase</option>
+    <option value="rearChase">Rear chase</option>
+    <option value="free">Free camera</option>
+  </select>
+  <select id="vp-driver" class="hidden" title="Focus the camera on another driver (V next, Shift+V previous, Ctrl+V your car). Your car keeps racing.">
+    <option value="player">Your car</option>
+  </select>
+  <button id="vp-wind-tunnel" type="button" title="R&amp;D — wind tunnel, aero readouts, and chassis dyno">R&amp;D</button>
+  <button id="vp-showroom" type="button" title="Back to the showroom — leaves R&amp;D and reframes the car">Showroom</button>
+  <button id="vp-race" type="button" title="Start a full race: 40-car AI field, 10 laps, grid start on the current track. Drive into the pack - you're scored too. Click again to end.">Start race</button>
+  <button id="vp-state-save" type="button" title="Save the current driving state (position, speed, gear)">Save state</button>
+  <button id="vp-state-load" type="button" title="Teleport back to the saved driving state">Load state</button>
+  <button id="panel-toggle" class="hdr-btn" title="Toggle sidebar (N)">&#9776;</button>
+</header>
+
+<main>
+  <div id="viewer-wrap">
+    <div id="viewer-canvas-host"></div>
+    <div id="viewer-hud">
+      <span id="viewer-model-name"></span>
+      <span id="viewer-cam"></span>
+      <span id="viewer-fps"></span>
+      <span id="viewer-race"></span>
+    </div>
+    <div id="viewer-empty">
+      <h2>Nothing loaded</h2>
+      <p>Click <b>Open Game Folder</b> up top and point it at your NR2003
+      install, then pick a car (loads automatically) and a track, then click <b>Load</b>. You can also drop a single mod or
+      track folder anywhere in this window.</p>
+    </div>
+
+    <div id="brand-badge">RE2003 v0.0.04</div>
+
+    <div id="wind-tunnel-panel" hidden>
+      <div class="wt-head"><span>R&amp;D</span><div class="wt-head-btns"><button id="wt-min" type="button" title="Minimize controls">&#9662;</button><button id="wt-close" type="button" title="Close R&amp;D">&#10005;</button></div></div>
+      <div class="wt-body">
+        <div class="vp-ctrl-divider">Aerodynamics</div>
+        <label class="vp-slider">Wind speed <span id="wt-speed-val"></span>
+          <input type="range" id="wt-speed" min="0" max="105" step="1" value="60"></label>
+        <label class="vp-slider">Wind angle <span id="wt-yaw-val"></span>
+          <input type="range" id="wt-yaw" min="-180" max="180" step="1" value="0"></label>
+        <label class="vp-check"><input type="checkbox" id="wt-show-arrows"> Show force arrows</label>
+        <div id="wt-readout"></div>
+        <div class="vp-ctrl-divider">Dyno</div>
+        <button id="wt-dyno-run" type="button" class="vp-ctrl-reset" title="Full-throttle pull in 4th gear — torque and HP on the wall TV">Run dyno pass</button>
+        <div id="wt-dyno-readout"></div>
+        <p class="vp-hint">Drag the smoke wand to trace airflow. Re-enter after code updates to rebuild the room.</p>
+      </div>
+    </div>
+
+    <aside id="viewer-panel">
+      <div id="panel-sections">
+        <details>
+          <summary>Scene</summary>
+          <div class="sec-body"><div id="vp-info"></div></div>
+        </details>
+
+        <details>
+          <summary>Paint</summary>
+          <div class="sec-body">
+            <select id="vp-car-select" class="vp-car-select-hidden" aria-hidden="true" tabindex="-1"></select>
+            <div id="vp-car-paints" class="vp-car-paints"></div>
+            <p class="vp-hint">Hover to preview; click to apply.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Display</summary>
+          <div class="sec-body">
+            <label class="vp-check"><input type="checkbox" id="vp-wireframe"> Wireframe</label>
+          </div>
+        </details>
+
+        <details>
+          <summary>Graphics</summary>
+          <div class="sec-body">
+            <div class="vp-ctrl-divider">Image grade</div>
+            <label class="vp-slider">Exposure <span id="vp-exposure-val"></span>
+              <input type="range" id="vp-exposure" min="0.4" max="2" step="0.02"
+                title="HDR exposure (ACES filmic tone mapping)"></label>
+            <label class="vp-slider">Contrast <span id="vp-contrast-val"></span>
+              <input type="range" id="vp-contrast" min="-0.5" max="1.6" step="0.02" value="0.26"></label>
+            <label class="vp-slider">Saturation <span id="vp-saturation-val"></span>
+              <input type="range" id="vp-saturation" min="0.2" max="1.3" step="0.02"></label>
+            <label class="vp-slider">Black level <span id="vp-lift-val"></span>
+              <input type="range" id="vp-lift" min="-0.6" max="0.4" step="0.01"></label>
+            <div class="vp-ctrl-divider">Reflections</div>
+            <label class="vp-check"><input type="checkbox" id="vp-reflections" title="Live cubemap reflections on car paint and glass"> Car reflections</label>
+            <label class="vp-select">Reflection quality
+              <select id="vp-reflect-q" title="Low = cheaper updates; High = every frame">
+                <option value="low">Low</option>
+                <option value="high">High</option>
+              </select></label>
+            <label class="vp-slider">Reflection strength <span id="vp-refl-strength-val"></span>
+              <input type="range" id="vp-refl-strength" min="0" max="1" step="0.05"></label>
+            <p class="vp-hint">Turn off reflections for extra FPS.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Driving</summary>
+          <div class="sec-body">
+            <div class="vp-ctrl-divider">Vehicle</div>
+            <label class="vp-slider">Ride height <span id="vp-ride-val"></span>
+              <input type="range" id="vp-ride" min="0" max="0.12" step="0.005" value="0.025"></label>
+            <label class="vp-slider">Car mass <span id="vp-mass-val"></span>
+              <input type="range" id="vp-mass" min="0.5" max="2" step="0.05" value="1"
+                title="Weight for every car — yours and AI"></label>
+            <label class="vp-slider">My car peak HP <span id="vp-player-hp-val"></span>
+              <input type="range" id="vp-player-hp" min="250" max="900" step="5" value="750"
+                title="Peak engine horsepower for your car (driving and dyno)"></label>
+            <label class="vp-slider">AI peak HP <span id="vp-ai-hp-val"></span>
+              <input type="range" id="vp-ai-hp" min="250" max="900" step="5" value="750"
+                title="Peak engine horsepower for AI cars"></label>
+            <label class="vp-slider">Steering sensitivity <span id="vp-steer-sens-val"></span>
+              <input type="range" id="vp-steer-sens" min="0.3" max="1.2" step="0.05" value="0.6"></label>
+            <label class="vp-check"><input type="checkbox" id="vp-no-damage"
+              title="No downforce loss, drag, or power cut after contact"> Disable damage</label>
+          </div>
+        </details>
+
+        <details id="vp-garage-sec" hidden>
+          <summary>Garage</summary>
+          <div class="sec-body">
+            <label class="vp-select">Setup
+              <select id="vp-setup-select" title="Track garage setup (.sim)"></select></label>
+            <div id="vp-setup-info"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Aerodynamics</summary>
+          <div class="sec-body">
+            <div class="vp-ctrl-divider">Drag &amp; stability</div>
+            <label class="vp-slider">Drag <span id="vp-aero-drag-val"></span>
+              <input type="range" id="vp-aero-drag" min="0.3" max="2.5" step="0.05"></label>
+            <label class="vp-slider">Blowover onset <span id="vp-aero-blowover-val"></span>
+              <input type="range" id="vp-aero-blowover" min="0.5" max="3.0" step="0.05"></label>
+            <label class="vp-check"><input type="checkbox" id="vp-aero-flaps"> Roof flaps</label>
+            <label class="vp-check"><input type="checkbox" id="vp-aero-flaps-eff"> Flaps prevent blowover</label>
+            <div class="vp-ctrl-divider">Wind &amp; airflow shape</div>
+            <label class="vp-slider" title="How hard the body throws the stream up over the roof">Roof lift <span id="vp-wind-roof-lift-val"></span>
+              <input type="range" id="vp-wind-roof-lift" min="0" max="2.5" step="0.02"></label>
+            <label class="vp-slider" title="Where that roof lift quits, as a fraction of the car's half-length. LOWER = flow drops sooner (the hump control)">Lift cutoff <span id="vp-wind-lift-cut-val"></span>
+              <input type="range" id="vp-wind-lift-cut" min="0.05" max="1.5" step="0.01"></label>
+            <label class="vp-slider" title="How strongly the shell pushes air out around itself">Body wrap <span id="vp-wind-body-push-val"></span>
+              <input type="range" id="vp-wind-body-push" min="0" max="1.5" step="0.02"></label>
+            <label class="vp-slider" title="How hard the stream is pulled back down behind the roof">Downwash <span id="vp-wind-down-str-val"></span>
+              <input type="range" id="vp-wind-down-str" min="0" max="3" step="0.05"></label>
+            <label class="vp-slider" title="Where the downwash starts, as a fraction of half-length from the car's centre. Negative = ahead of centre, so it bites earlier">Downwash start <span id="vp-wind-down-start-val"></span>
+              <input type="range" id="vp-wind-down-start" min="-1" max="1" step="0.02"></label>
+            <label class="vp-slider" title="How far past the tail the downwash keeps pulling before it trails off">Downwash reach <span id="vp-wind-down-fade-val"></span>
+              <input type="range" id="vp-wind-down-fade" min="1" max="16" step="0.5"></label>
+            <label class="vp-slider" title="How much the wake slows the air behind the car">Wake deficit <span id="vp-wind-wake-def-val"></span>
+              <input type="range" id="vp-wind-wake-def" min="0" max="0.9" step="0.02"></label>
+            <label class="vp-slider" title="How strongly the wake draws air back toward its axis">Wake closure <span id="vp-wind-wake-close-val"></span>
+              <input type="range" id="vp-wind-wake-close" min="0" max="0.6" step="0.01"></label>
+            <label class="vp-slider" title="Speed-up of the air squeezed under the splitter">Underbody ram <span id="vp-wind-under-ram-val"></span>
+              <input type="range" id="vp-wind-under-ram" min="0" max="1.2" step="0.02"></label>
+            <button id="vp-wind-reset" type="button" class="vp-ctrl-reset" title="Restore the baked airflow values">Reset wind shape</button>
+            <div class="vp-ctrl-divider">Flow smoke (on track)</div>
+            <label class="vp-check"><input type="checkbox" id="vp-flow-smoke"> Smoke stream while driving</label>
+            <label class="vp-slider">Stream height <span id="vp-flow-height-val"></span>
+              <input type="range" id="vp-flow-height" min="0.05" max="3" step="0.05"></label>
+            <label class="vp-slider">Stream side <span id="vp-flow-side-val"></span>
+              <input type="range" id="vp-flow-side" min="-3" max="3" step="0.1"></label>
+            <div class="vp-ctrl-divider">Test</div>
+            <button id="vp-test-blowover" type="button" class="vp-ctrl-reset" title="Slam into a backwards spin (drive first)">Test blowover</button>
+            <button id="vp-flip-roof" type="button" class="vp-ctrl-reset" title="Place the car upside-down on its roof here (drive first)">Flip to roof</button>
+            <p class="vp-hint">Use <b>R&amp;D</b> (top bar) for force arrows and the dyno.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Collisions</summary>
+          <div class="sec-body">
+            <label class="vp-slider">Hit impulse strength <span id="vp-hit-impulse-val"></span>
+              <input type="range" id="vp-hit-impulse" min="0.4" max="3" step="0.05" value="1"></label>
+            <label class="vp-slider">Car-car bounce <span id="vp-car-bounce-val"></span>
+              <input type="range" id="vp-car-bounce" min="0" max="0.6" step="0.02" value="0.08"></label>
+            <label class="vp-slider">Launch speed gate <span id="vp-wreck-gate-val"></span>
+              <input type="range" id="vp-wreck-gate" min="1.5" max="12" step="0.5" value="4"></label>
+            <label class="vp-slider">Wreck launch lift <span id="vp-wreck-lift-val"></span>
+              <input type="range" id="vp-wreck-lift" min="0.05" max="0.5" step="0.01" value="0.22"></label>
+            <p class="vp-hint">For overall weight/inertia use <b>Driving → Car mass</b>.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>AI racing</summary>
+          <div class="sec-body">
+            <div class="vp-ctrl-divider">Field behaviour</div>
+            <label class="vp-check"><input type="checkbox" id="vp-ai-race"> AI cars race the track</label>
+            <label class="vp-slider">AI speed <span id="vp-ai-speed-val"></span>
+              <input type="range" id="vp-ai-speed" min="0.6" max="5" step="0.05"></label>
+            <label class="vp-slider">AI aggression <span id="vp-ai-aggro-val"></span>
+              <input type="range" id="vp-ai-aggro" min="0" max="1" step="0.05"></label>
+            <label class="vp-slider">AI lane changes <span id="vp-ai-lane-val"></span>
+              <input type="range" id="vp-ai-lane" min="0" max="1" step="0.05"></label>
+            <label class="vp-slider">AI line momentum <span id="vp-ai-momentum-val"></span>
+              <input type="range" id="vp-ai-momentum" min="0.25" max="2" step="0.05" value="0.72"></label>
+            <label class="vp-slider">Yellow line margin <span id="vp-ai-yellow-val"></span>
+              <input type="range" id="vp-ai-yellow" min="3" max="8" step="0.25" value="4"></label>
+            <label class="vp-check"><input type="checkbox" id="vp-ai-tandem"> AI tandem drafting</label>
+            <div class="vp-ctrl-divider">Lane layout</div>
+            <label class="vp-check"><input type="checkbox" id="vp-ai-lanes"> Show AI racing lanes</label>
+            <div id="vp-ai-lane-list"></div>
+            <button id="vp-ai-lane-add" type="button" class="vp-ctrl-reset">+ Add lane</button>
+            <p class="vp-hint">Live mid-race — the whole field responds as you drag sliders.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>AI tuning (advanced)</summary>
+          <div class="sec-body">
+            <p class="vp-hint">Every AI parameter. Aggression &amp; skill apply when the field is re-armed.</p>
+            <div id="vp-ai-params"></div>
+            <button id="vp-ai-params-reset" type="button" class="vp-ctrl-reset">Reset AI params to defaults</button>
+          </div>
+        </details>
+
+        <details>
+          <summary>Controls</summary>
+          <div class="sec-body">
+            <p id="vp-pad-status" class="vp-pad-status warn">Checking controller…</p>
+            <p class="vp-hint">Click a binding, then press a key or controller input. Esc cancels.</p>
+            <div id="vp-ctrl-keys"></div>
+            <div class="vp-ctrl-divider">Gamepad</div>
+            <label class="vp-check"><input type="checkbox" id="vp-pad-invert"> Invert steer axis</label>
+            <label class="vp-check"><input type="checkbox" id="vp-pad-orbit-invert"> Invert orbit axis</label>
+            <label class="vp-slider">Pad dead zone <span id="vp-pad-dead-val"></span>
+              <input type="range" id="vp-pad-dead" min="0.05" max="0.35" step="0.01"></label>
+            <div class="vp-ctrl-divider">Driving aids</div>
+            <label class="vp-check"><input type="checkbox" id="vp-aid-tc"> Traction control</label>
+            <label class="vp-check"><input type="checkbox" id="vp-aid-abs"> Anti-lock brakes</label>
+            <label class="vp-check"><input type="checkbox" id="vp-aid-stab"> Stability control</label>
+            <label class="vp-check"><input type="checkbox" id="vp-aid-steerboost"> Boost steering at low speeds</label>
+            <label class="vp-check"><input type="checkbox" id="vp-aid-ssteer"> Speed-sensitive steering</label>
+            <div class="vp-ctrl-divider">Debug</div>
+            <label class="vp-check"><input type="checkbox" id="vp-show-hitbox"> Show hitboxes (neon)</label>
+            <button id="vp-ctrl-reset" type="button" class="vp-ctrl-reset">Reset controls</button>
+          </div>
+        </details>
+
+        <details>
+          <summary>Effects</summary>
+          <div class="sec-body">
+            <label class="vp-select">Tire
+              <select id="vp-rub-tire" title="Which wheel gets the rub smoke ring">
+                <option value="0">Left front (LF)</option>
+                <option value="1">Right front (RF)</option>
+                <option value="2">Left rear (LR)</option>
+                <option value="3">Right rear (RR)</option>
+              </select></label>
+            <label class="vp-check"><input type="checkbox" id="vp-rub-sim"> Simulate tire rub</label>
+            <p class="vp-hint">Continuous smoke ring on one tire while driving.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Parts</summary>
+          <div class="sec-body">
+            <label class="vp-select" id="vp-wing-row" hidden>Rear aero
+              <select id="vp-wing" title="Swap the rear wing / spoiler variant, or hide it"></select></label>
+            <div id="vp-parts"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Textures</summary>
+          <div class="sec-body"><div id="vp-textures"></div></div>
+        </details>
+      </div>
+      <div id="panel-footer">
+        <button id="vp-save-defaults" type="button" class="vp-ctrl-reset vp-save-defaults-btn" title="Save defaults to localStorage and export js/baked-defaults.js for the repo (standalone — no server).">Save sliders as defaults</button>
+      </div>
+      <div id="vp-log"></div>
+    </aside>
+  </div>
+</main>
+
+<script src="js/zip.js"></script>
+<script src="js/dcl.js"></script>
+<script src="js/mip.js"></script>
+<script src="js/dat.js"></script>
+<script src="js/frac.js"></script>
+<script src="js/threedo.js"></script>
+<script src="js/threedo-edit.js"></script>
+<script src="js/track.js"></script>
+<script src="js/tracksurface.js"></script>
+<script src="js/endlessroad.js"></script>
+<script src="js/trackcam.js"></script>
+<script src="js/vendor/three.min.js"></script>
+<script src="js/carcam.js"></script>
+<script src="js/vendor/OrbitControls.js"></script>
+<script src="js/simsetup.js"></script>
+<script src="js/physics.js?v=f052"></script>
+<script src="js/tirefx.js"></script>
+<script src="js/baked-defaults.js?v=f046"></script>
+<script src="js/drivecontrols.js?v=f046"></script>
+<script src="js/viewer.js?v=f051"></script>
+<script src="js/library.js"></script>
+<script src="js/re2003-diag.js"></script>
+</body>
+</html>
